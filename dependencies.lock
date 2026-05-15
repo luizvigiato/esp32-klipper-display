@@ -1,0 +1,20 @@
+dependencies:
+  idf:
+    source:
+      type: idf
+    version: 6.0.1
+  nixy4/u8g2:
+    component_hash: d23326bf33da6b0a41ef16caa527689d770bcb7c469d8d57ca18a42f4cfed81b
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=5.0'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 0.1.4
+direct_dependencies:
+- nixy4/u8g2
+manifest_hash: 84d6bf62858d703536832b5f6c9f1ed9cf67022a2c4971795ddd5547836c1a95
+target: esp32
+version: 3.0.0

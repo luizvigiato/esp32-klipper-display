@@ -1,0 +1,95 @@
+menu "Configuracao Wi-Fi"
+
+    config WIFI_SSID
+        string "SSID da rede Wi-Fi"
+        default "MEU_WIFI"
+        help
+            SSID da rede na qual o ESP32 deve se conectar em modo Station.
+
+    config WIFI_PASSWORD
+        string "Senha da rede Wi-Fi"
+        default "MINHA_SENHA"
+        help
+            Senha WPA/WPA2 da rede Wi-Fi.
+
+    config WIFI_MAXIMUM_RETRY
+        int "Numero maximo de tentativas de conexao"
+        range 1 20
+        default 10
+        help
+            Numero de tentativas de reconexao apos desconexao.
+
+endmenu
+
+menu "Configuracao Display OLED"
+
+    config DISPLAY_ENABLE
+        bool "Habilitar display OLED I2C"
+        default y
+        help
+            Habilita exibicao local em OLED (SSD1306) via I2C.
+
+    if DISPLAY_ENABLE
+
+        config DISPLAY_I2C_PORT
+            int "Porta I2C"
+            range 0 1
+            default 0
+            help
+                Porta do controlador I2C no ESP32.
+
+        config DISPLAY_I2C_SDA_GPIO
+            int "GPIO SDA"
+            range 0 48
+            default 21
+            help
+                GPIO conectado ao SDA do display.
+
+        config DISPLAY_I2C_SCL_GPIO
+            int "GPIO SCL"
+            range 0 48
+            default 22
+            help
+                GPIO conectado ao SCL do display.
+
+        config DISPLAY_I2C_FREQ_HZ
+            int "Frequencia I2C (Hz)"
+            range 100000 800000
+            default 400000
+            help
+                Frequencia do barramento I2C do display.
+
+        config DISPLAY_I2C_ADDR
+            hex "Endereco I2C do display"
+            range 0x03 0x77
+            default 0x3C
+            help
+                Endereco I2C do controlador OLED.
+
+    endif
+
+endmenu
+
+menu "Configuracao Moonraker"
+
+    config MOONRAKER_IP
+        string "IP do Moonraker"
+        default "192.168.7.50"
+        help
+            Endereco IP do host rodando Moonraker na rede local.
+
+    config MOONRAKER_PORT
+        int "Porta do Moonraker"
+        range 1 65535
+        default 7125
+        help
+            Porta HTTP do Moonraker.
+
+    config MOONRAKER_POLL_INTERVAL_MS
+        int "Intervalo de atualizacao (ms)"
+        range 1000 60000
+        default 2000
+        help
+            Intervalo entre consultas HTTP no endpoint de status.
+
+endmenu
