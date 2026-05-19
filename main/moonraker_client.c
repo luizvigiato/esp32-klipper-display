@@ -75,22 +75,54 @@ static const char *find_in_range(const char *start, const char *end_exclusive, c
     return NULL;
 }
 
-static bool json_find_object_bounds(const char *json, const char *object_name,
-                                    const char **obj_start, const char **obj_end)
+static const char *skip_ws(const char *p, const char *end_exclusive)
+{
+    while (p < end_exclusive && isspace((unsigned char)*p)) {
+        p++;
+    }
+    return p;
+}
+
+static bool json_find_field_value_start(const char *start, const char *end_exclusive,
+                                        const char *field_name, const char **value_start)
 {
     char pattern[48];
-    int n = snprintf(pattern, sizeof(pattern), "\"%s\":{", object_name);
+    int n = snprintf(pattern, sizeof(pattern), "\"%s\"", field_name);
     if (n <= 0 || n >= (int)sizeof(pattern)) {
         return false;
     }
 
-    const char *match = strstr(json, pattern);
-    if (match == NULL) {
+    const char *field = find_in_range(start, end_exclusive, pattern);
+    if (field == NULL) {
         return false;
     }
 
-    const char *start = strchr(match, '{');
-    if (start == NULL) {
+    const char *p = field + strlen(pattern);
+    p = skip_ws(p, end_exclusive);
+    if (p >= end_exclusive || *p != ':') {
+        return false;
+    }
+
+    p++;
+    p = skip_ws(p, end_exclusive);
+    if (p >= end_exclusive) {
+        return false;
+    }
+
+    *value_start = p;
+    return true;
+}
+
+static bool json_find_object_bounds(const char *json, const char *object_name,
+                                    const char **obj_start, const char **obj_end)
+{
+    const char *end = json + strlen(json);
+    const char *start = NULL;
+    if (!json_find_field_value_start(json, end, object_name, &start)) {
+        return false;
+    }
+
+    if (*start != '{') {
         return false;
     }
 
@@ -131,20 +163,9 @@ static bool json_find_object_bounds(const char *json, const char *object_name,
 static bool json_get_number_in_object(const char *obj_start, const char *obj_end,
                                       const char *field_name, double *value)
 {
-    char pattern[48];
-    int n = snprintf(pattern, sizeof(pattern), "\"%s\":", field_name);
-    if (n <= 0 || n >= (int)sizeof(pattern)) {
+    const char *num_start = NULL;
+    if (!json_find_field_value_start(obj_start, obj_end + 1, field_name, &num_start)) {
         return false;
-    }
-
-    const char *field = find_in_range(obj_start, obj_end + 1, pattern);
-    if (field == NULL) {
-        return false;
-    }
-
-    const char *num_start = field + strlen(pattern);
-    while (num_start < obj_end && isspace((unsigned char)*num_start)) {
-        num_start++;
     }
 
     char *parse_end = NULL;
@@ -160,18 +181,24 @@ static bool json_get_number_in_object(const char *obj_start, const char *obj_end
 static bool json_get_string_in_object(const char *obj_start, const char *obj_end,
                                       const char *field_name, char *out, size_t out_len)
 {
-    char pattern[48];
-    int n = snprintf(pattern, sizeof(pattern), "\"%s\":\"", field_name);
-    if (n <= 0 || n >= (int)sizeof(pattern)) {
+    const char *value_start = NULL;
+    if (!json_find_field_value_start(obj_start, obj_end + 1, field_name, &value_start)) {
         return false;
     }
 
-    const char *field = find_in_range(obj_start, obj_end + 1, pattern);
-    if (field == NULL) {
+    if (*value_start == 'n') {
+        if ((obj_end + 1 - value_start) >= 4 && memcmp(value_start, "null", 4) == 0) {
+            out[0] = '\0';
+            return true;
+        }
         return false;
     }
 
-    const char *value_start = field + strlen(pattern);
+    if (*value_start != '"') {
+        return false;
+    }
+
+    value_start++;
     size_t i = 0;
     bool escaped = false;
     for (const char *p = value_start; p < obj_end; p++) {
@@ -279,13 +306,23 @@ static esp_err_t moonraker_get_status(moonraker_status_t *status)
     }
 
     if (status_code != 200 || response.data == NULL) {
+        ESP_LOGW(TAG, "Resposta HTTP invalida (status=%d, body_len=%u)",
+                 status_code, (unsigned)response.len);
+        if (response.data != NULL) {
+            ESP_LOGD(TAG, "Body recebido: %.160s", response.data);
+        }
         free(response.data);
-        return ESP_FAIL;
+        return ESP_ERR_INVALID_RESPONSE;
     }
 
     bool parsed = parse_moonraker_status(response.data, status);
+    if (!parsed) {
+        ESP_LOGW(TAG, "Falha no parse da resposta Moonraker (body_len=%u)",
+                 (unsigned)response.len);
+        ESP_LOGD(TAG, "Body recebido: %.220s", response.data);
+    }
     free(response.data);
-    return parsed ? ESP_OK : ESP_FAIL;
+    return parsed ? ESP_OK : ESP_ERR_INVALID_RESPONSE;
 }
 
 static void moonraker_task(void *arg)
