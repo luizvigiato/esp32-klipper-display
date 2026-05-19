@@ -116,45 +116,66 @@ static bool json_find_field_value_start(const char *start, const char *end_exclu
 static bool json_find_object_bounds(const char *json, const char *object_name,
                                     const char **obj_start, const char **obj_end)
 {
+    char pattern[48];
+    int n = snprintf(pattern, sizeof(pattern), "\"%s\"", object_name);
+    if (n <= 0 || n >= (int)sizeof(pattern)) {
+        return false;
+    }
+
     const char *end = json + strlen(json);
-    const char *start = NULL;
-    if (!json_find_field_value_start(json, end, object_name, &start)) {
-        return false;
-    }
+    const char *search = json;
+    while (search < end) {
+        const char *field = find_in_range(search, end, pattern);
+        if (field == NULL) {
+            return false;
+        }
 
-    if (*start != '{') {
-        return false;
-    }
-
-    int depth = 0;
-    bool in_string = false;
-    bool escaped = false;
-    for (const char *p = start; *p != '\0'; p++) {
-        char c = *p;
-
-        if (in_string) {
-            if (escaped) {
-                escaped = false;
-            } else if (c == '\\') {
-                escaped = true;
-            } else if (c == '"') {
-                in_string = false;
-            }
+        const char *p = field + strlen(pattern);
+        p = skip_ws(p, end);
+        if (p >= end || *p != ':') {
+            search = field + 1;
             continue;
         }
 
-        if (c == '"') {
-            in_string = true;
-        } else if (c == '{') {
-            depth++;
-        } else if (c == '}') {
-            depth--;
-            if (depth == 0) {
-                *obj_start = start;
-                *obj_end = p;
-                return true;
+        p++;
+        p = skip_ws(p, end);
+        if (p >= end || *p != '{') {
+            search = field + 1;
+            continue;
+        }
+
+        int depth = 0;
+        bool in_string = false;
+        bool escaped = false;
+        for (const char *q = p; *q != '\0'; q++) {
+            char c = *q;
+
+            if (in_string) {
+                if (escaped) {
+                    escaped = false;
+                } else if (c == '\\') {
+                    escaped = true;
+                } else if (c == '"') {
+                    in_string = false;
+                }
+                continue;
+            }
+
+            if (c == '"') {
+                in_string = true;
+            } else if (c == '{') {
+                depth++;
+            } else if (c == '}') {
+                depth--;
+                if (depth == 0) {
+                    *obj_start = p;
+                    *obj_end = q;
+                    return true;
+                }
             }
         }
+
+        search = field + 1;
     }
 
     return false;
